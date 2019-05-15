@@ -4,19 +4,20 @@ library(raster)
 library(RColorBrewer)
 library(rgeos)
 library(maptools)
+source("R/sn2.R"); source("R/stream_drift.R")
 
 #stream and watershed infiles
-rivers <- shapefile("Project/rivers/rivers.shp")
-ws <- shapefile("~/../Downloads/Oregon_Watershed_Councils_2014/Oregon_Watershed_Councils_2014.shp")
+rivers <- shapefile("shapefiles/rivers/rivers.shp")
+ws <- shapefile("shapefiles/watersheds/Oregon_Watershed_Councils_2014.shp")
 dcws <- ws[ws$altName == "Upper Deschutes WC" | ws$altName == "Crooked River WC",]
 #plot(dcws)
 dcws <- aggregate(dcws)
 newCRS <- CRS("+proj=lcc +lat_1=43 +lat_2=45.5 +lat_0=41.75 +lon_0=-120.5 +x_0=399999.9999984001 +y_0=0 +datum=NAD83 +units=ft +no_defs +ellps=GRS80 +towgs84=0,0,0")
 
 #elevation infiles, crop them, fix their row ids, and rbind them.
-e_c <- shapefile("Project/Contour_100ce/Contour_100ce.shp")
-e_s <- shapefile("Project/Contour_100s/Contour_100s.shp")
-e_w <- shapefile("Project/Contour_100w/Contour_100w.shp")
+e_c <- shapefile("shapefiles/contours/Contour_100ce/Contour_100ce.shp")
+e_s <- shapefile("shapefiles/contours/Contour_100s/Contour_100s.shp")
+e_w <- shapefile("shapefiles/contours/Contour_100w/Contour_100w.shp")
 e_c_c <- crop(e_c, dcws)
 e_s_c <- crop(e_s, dcws)
 e_w_c <- crop(e_w, dcws)
@@ -68,14 +69,14 @@ for (i in 1:ncol(test.m[[1]])){
 }
 
 
-#barriers <- shapefile("Project/ODFW_44_5_ofpbds_shp/ofpbds_pt.shp")
+#barriers <- shapefile("ODFW_44_5_ofpbds_shp/ofpbds_pt.shp")
 #barriers <- spTransform(barriers, newCRS)
 #barriers <- crop(barriers, dcws)
 #impass <- barriers[barriers$fpbFPasSta == "Blocked"|barriers$fpbFPasSta == "Partial",]
 #plot(impass)
 #plot(soi, add = TRUE)
 
-#wbs <- shapefile("Project/waterbodies/waterbodies.shp")
+#wbs <- shapefile("waterbodies/waterbodies.shp")
 #wbs <- spTransform(wbs, newCRS)
 #plot(soi)
 #plot(impass, add = TRUE)
