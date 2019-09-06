@@ -253,9 +253,8 @@ found.maf <- function(maf, i.mat, n0){
 # in.xs: An input set of positions to use. Needed if in.mat is defined. Just needed for 
 #        printing to xs column in output.
 # in.freqs: Optional input set of allele frequencies to be used instead of randomly drawn ones.
-stream.drift <- function(n0, l, a, r, m, L, k, Tf, maf.min = 0.05, maf.max = 0.5,
+stream.drift <- function(n0, l, a = NULL, r, m = NULL, L = NULL, k, Tf, maf.min = 0.05, maf.max = 0.5,
                          in.mat = NULL, in.xs = NULL, in.freqs = NULL){
-  browser()
   #A function to calculate population growth based on the beverton-holt model:
   #Inputs: nt: starting population
   #        r: intrinsic growth rate
@@ -353,7 +352,6 @@ stream.drift <- function(n0, l, a, r, m, L, k, Tf, maf.min = 0.05, maf.max = 0.5
           }
         }
       }
-      browser()
       mafs <- colSums(bm, na.rm = TRUE)/(2*colSums(dm, na.rm = TRUE))
       #print(mafs)
       datm[,(h+2)] <- mafs
@@ -427,14 +425,16 @@ A3 <- function(a,m,L,n,y,xs){
 # give.xs: Logical. If TRUE, returns a two part list: 1) the dispersal matrix, 2) a data frame
 #          where the first column is the position along each branch and the second is the branch ID.
 #          These positions are the positions refered to in the dispersal matrix, in the order given.
-#
+# normalize: Logical. If TRUE, normalizes each column to sum to 1 (no individuals leave the system or enter the
+#            system except by growth).
+
 #Outputs:
 # Dispersal matrix and (if give.xs = TRUE) a dataframe detailing the positions the dispersal matrix
 # refers to.
 #
 #Notes:
 # Undercase s and e are restricted vertex names, and will cause errors if used in input.
-Edge.to.Matrix <- function(brchs, a, m, dx, give.xs = TRUE){
+Edge.to.Matrix <- function(brchs, a, m, dx, give.xs = TRUE, normalize = TRUE){
   if(any(brchs[,2] %% dx != 0)){
     stop("All branch lengths MUST be divisible by the given dx value. If this is not the case,
         interpolation will not be consistant across branches. 0 length branches are acceptable, and
@@ -512,10 +512,10 @@ Edge.to.Matrix <- function(brchs, a, m, dx, give.xs = TRUE){
       }
       else{ #for all others...
         #need to find all nodes passed through
-        be.ns <- brchs[i,3] #branch one start node
-        be.ne <- brchs[i,5] #branch one end node
-        bs.ns <- brchs[j,3] #branch two start node
-        bs.ne <- brchs[j,5] #branch two end node
+        be.ns <- as.character(brchs[i,3]) #branch one start node
+        be.ne <- as.character(brchs[i,5]) #branch one end node
+        bs.ns <- as.character(brchs[j,3]) #branch two start node
+        bs.ne <- as.character(brchs[j,5]) #branch two end node
         #print(bnet)
         #print(brchs[i,3])
         #cat(bs.ns, bs.ne, be.ns, be.ne, "\n")
@@ -601,6 +601,12 @@ Edge.to.Matrix <- function(brchs, a, m, dx, give.xs = TRUE){
     full.matrix <- cbind(full.matrix, mc) #bind the large matrix row to the full matrix
   }
   full.matrix <- full.matrix[,-1] #remove the filler column
+  
+  # normalize
+  if(normalize){
+    full.matrix <- full.matrix/rep(colSums(full.matrix), each = nrow(full.matrix))
+  }
+  
   if (give.xs == TRUE){
     xs.output <- xs.output[-1,] #cut off initialization row
     output <- list(full.matrix, xs.output) #combine the matrix and xs.output into a list
@@ -624,7 +630,6 @@ GIS.to.Edge <- function(soi, ei, ei.c, plot.check = TRUE){
   require(rgdal)
   require(dplyr)
   require(ggplot2)
-  
   
   
   cat("Reminder: after vertices are found, this function may require user inputs.\nDisaggregating...\n")
@@ -671,6 +676,9 @@ GIS.to.Edge <- function(soi, ei, ei.c, plot.check = TRUE){
   cat("Figuring out elevation for", nrow(zd_es), "total vertices...\n")
   temp <- SpatialPoints(zd_es, proj4string = CRS(proj4string(soi))) #make a sp df
   v.els <- numeric(nrow(data.frame(temp))) #initialize output vector
+  branch_map_data <- ggplot2::fortify(soi)
+  branch_map_data$vertex <- NA
+  
   for (k in 1:length(v.els)) { #loop through the vertices. Could do this by grabbing two closest, interpolating if I wanted to be more accurate.
     cat("Vertex:", k, "\n")
     ds <- gDistance(temp[k,], ei, byid = TRUE) #get all of the distances to elements of the elevation SLDF
@@ -684,7 +692,13 @@ GIS.to.Edge <- function(soi, ei, ei.c, plot.check = TRUE){
     wd <- w1*as.numeric(as.data.frame(ei[ds[1,1], ei.c])) + 
       w2*as.numeric(as.data.frame(ei[ds[2,1], ei.c])) #get the weighted distance
     v.els[k] <- wd #print the distance.
+    
+    
+    # now, figure out which stream portions map to this vertex for later use
+    matches <- which(apply(branch_map_data[,1:2], 1, function(x) all(x == zd_es[k,])))
+    branch_map_data$vertex[matches] <- k
   }
+  
   zd_es <- cbind(zd_es, v.els)
   colnames(zd_es)[3] <- "elev"
   
@@ -707,7 +721,11 @@ GIS.to.Edge <- function(soi, ei, ei.c, plot.check = TRUE){
       geom_point(data = zd_es_df, aes(x = x, y = y, color = el.div), size = 2) +
       scale_color_gradient2(high = "red", mid = "blue", low = "purple") +
       geom_text(data = zd_es_df, aes(x = x + (off.scale.x/90), y = y + (off.scale.y/90), label = lab), color = "darkred")
+    
     print(c.plot)
+    View(zd_es_df)
+    cat("Vertex check plot and data.frame opened.\n")
+    
     
     #accept inputs, rearrange point ranks manually.
     #check to see if adjustments are needed:
@@ -840,7 +858,25 @@ GIS.to.Edge <- function(soi, ei, ei.c, plot.check = TRUE){
       s.c <- s.c + 1 #increase the stream count
     }
   }
-  return(out)
+  
+  # clean up the branch map data, work point
+  cbmd <- na.omit(branch_map_data)
+  branch_map_data$branch <- 0
+  for(i in 1:(nrow(cbmd) - 1)){
+    if(as.numeric(rownames(cbmd)[i]) + 1 == as.numeric(rownames(cbmd)[i+1])){next} # if we are moving on to the next segment (aka, no stream segments between this vertex and the next), skip
+    match.branch <- c(cbmd[i,]$vertex, cbmd[i + 1,]$vertex)
+    match.branch <- which(out$start.vertex %in% match.branch & out$end.vertex %in% match.branch)
+    if(length(match.branch) == 0){browser()}
+    branch.rows <- as.numeric(row.names(cbmd)[i:(i+1)])
+    branch_map_data$branch[branch.rows[1]:branch.rows[2]] <- match.branch
+  }
+  
+  # convert the matrix IDs to alpha
+  out$start.vertex <- paste0("vertex_", out$start.vertex)
+  out$end.vertex <- paste0("vertex_", out$end.vertex)
+  branch_map_data$vertex[-which(is.na(branch_map_data$vertex))] <- paste0("vertex_", branch_map_data$vertex[-which(is.na(branch_map_data$vertex))])
+  
+  return(list(edges = out, plot = c.plot, map_data = branch_map_data))
 }
 
 

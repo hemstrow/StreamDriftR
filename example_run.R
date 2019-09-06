@@ -1,8 +1,8 @@
 library(ggplot2); library(reshape2); source("R/stream_drift.R"); source("R/sn2.R")
 # parameters
 r <- 2 #set r
-k <- 3000 #set K
-Tf <- 50 #set number of gens
+k <- 300 #set K
+Tf <- 100 #set number of gens
 l <- 10 #set number of loci
 
 
@@ -16,7 +16,7 @@ bs <- data.frame(branch.id = c("001", "002", "003", "004", "005", "006"),
 
 
 # convert to a dispersal matrix
-dm <- Edge.to.Matrix(bs, 2, 5, 1)
+dm <- Edge.to.Matrix(bs, a = 5, 10, 1)
 
 # normalize so that all individuals end up somewhere (it's a close system). Can change latter
 for (i in 1:ncol(dm[[1]])){
