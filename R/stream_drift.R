@@ -307,6 +307,7 @@ stream.drift <- function(n0, l, a = NULL, r, m = NULL, L = NULL, k, Tf, maf.min 
   for(t in 1:Tf){ #for each time point
     if(t %% 10 == 0){cat("Time:", t, "\n")}
     #set up dm matrix:
+    browser()
     cdm <- t(i.mat)*datm[,1] #get the NUMBER of individuals leaving each pop for each other pop
     #with [1,1] the number that stay in 1,
     #[1,2] the number that leave 1 for 2, and so on.
@@ -315,64 +316,41 @@ stream.drift <- function(n0, l, a = NULL, r, m = NULL, L = NULL, k, Tf, maf.min 
     
     #do all of the binoms for each locus
     for(h in 1:l){ #for each loci...
-      browser()
-      bm <- matrix(NA, dim(dm)[1], dim(dm)[2]) #create an output matrix for mafs after binom
       maf <- datm[,(h+2)] #set mafs to work with
       
-      for(i in 1:nrow(dm)){#loop through rows of dm
-        nds <- dm[i,]#nds is a vector number of pops who went to each spot
-        nt <- sum(nds) #the total number of individuals
-        if(nt == 0){ #no binoms to do if there are no pops that disperesed, just return NA for the row
-          bm[i,] <- NA
-        }
-        else if(is.nan(maf[i]) == TRUE){
-          #cat("we have a problem.\n")
-          bm[i,] <- NA #in instances where individuals are dispersing from a pop that wasn't assigned
-          #a maf, this implies that the number of individuals who went into the location
-          #last gen was less than 1 (rounded out). Since you can't have 0 individuals move,
-          #their mafs were zero, and nothing can actually move out this gen.
-          #Therefore, the maf contribution of these individuals is NA, and should be ignored
-          #when calculaing weighted mafs.
-          dm[i,] <- 0 #likewise, reset the number of inds moving to zero to avoid messing up weights later
-          #browser()
-        }
-        else{
-          browser()
-          inds <- rbinom(nt, 2, maf[i]) #do a draws for each individual from the input maf
-          pos <- 0 #set starting position in the inds vector to zero
-          for(j in 1:(length(nds))){ #partition individuals form the inds vector into each location
-            if(nds[j] == 0){bm[i,j] <- NA} #if no individuals disperesed here, set the allele count as NA and move on
-            else{
-              bm[i,j] <- sum(inds[(pos+1):(pos+nds[j])]) #get the allele count for each spot
-              pos <- pos + nds[j]
-            }
-          }
-        }
-      }
-      mafs <- colSums(bm, na.rm = TRUE)/(2*colSums(dm, na.rm = TRUE))
-      #print(mafs)
+      # do the binomial draws
+      suppressWarnings(minors <- rbinom(length(dm), dm*2, maf)) # for each dispersal location, draw a for each gene copy, against the correct maf for the source population
+      minors <- matrix(minors, nrow(dm), ncol(dm))
+      
+      # get the minor allele frequencies
+      mafs <- colSums(minors, na.rm = TRUE)/(2*colSums(dm, na.rm = TRUE))
       datm[,(h+2)] <- mafs
     }
-    datm[,1]<-i.mat%*%datm[,1] #spread pop
-    datm[,1]<-BH(datm[,1], r, k) #grow pop
-    datm[which(datm[,1] < 1),-c(1:2)] <- NA
     
+
     # fix for any sites which had more than one individual migrate in but which had less than one individual per source pop.
     # does by taking the weighted average maf then doing draws from there
+    datm[which(datm[,1] < 1),-c(1:2)] <- NA
     bads <- which(rowSums(is.nan(datm[,-c(1:2)])) == ncol(datm) - 2)
     if(length(bads) != 0){
       # get weights
-      tcdm <- cdm[bads,]
-      tcdm <- tcdm[,-which(is.na(maf))]
-      w <- tcdm/rowSums(tcdm, na.rm = T)
+      tcdm <- cdm[,bads, drop = F]
+      tcdm <- tcdm[-which(is.na(datm[,3])),,drop = F]
+      w <- t(tcdm)/colSums(tcdm, na.rm = T)
+      w <- t(w)
       
       # do binoms for each maf
       for(h in 1:l){
-        twa <- t(w)*maf[-which(is.na(datm[,h + 2]))]
+        twa <- w*datm[,h + 2][-which(is.na(datm[,h + 2]))]
         twa <- colSums(twa, na.rm = T)
         datm[bads, h + 2] <- rbinom(length(bads), round(datm[bads,1]*2), twa)/round(datm[bads,1]*2)
       }
     }
+    
+    
+    # grow and update pop sizes
+    datm[,1] <- BH(colSums(cdm), r, k) #grow pop
+    
   }
   
   
