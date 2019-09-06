@@ -255,16 +255,8 @@ found.maf <- function(maf, i.mat, n0){
 # in.freqs: Optional input set of allele frequencies to be used instead of randomly drawn ones.
 stream.drift <- function(n0, l, a = NULL, r, m = NULL, L = NULL, k, Tf, maf.min = 0.05, maf.max = 0.5,
                          in.mat = NULL, in.xs = NULL, in.freqs = NULL){
-  #A function to calculate population growth based on the beverton-holt model:
-  #Inputs: nt: starting population
-  #        r: intrinsic growth rate
-  #        K: carrying capacity
-  BH <- function(nt, r, K){
-    ntf <- (exp(r)*nt)/(1 + (exp(r) - 1)*(nt/K))
-    return(ntf)
-  }
   
-  
+  #=============matrix preperation==============
   #if no in.mat supplied
   if(is.null(in.mat) == TRUE){
     #a function:
@@ -292,7 +284,8 @@ stream.drift <- function(n0, l, a = NULL, r, m = NULL, L = NULL, k, Tf, maf.min 
       stop()
     }
   }
-  #get and set initial mafs
+  
+  #===========get and set initial mafs and individuals=========
   if(is.null(in.freqs) == TRUE){
     imaf <- runif(l, maf.min, maf.max) #generate initial mafs
   }
@@ -309,17 +302,20 @@ stream.drift <- function(n0, l, a = NULL, r, m = NULL, L = NULL, k, Tf, maf.min 
   # add allele frequencies where n0 is not zero
   datm[which(n0 != 0),-c(1:2)] <- imaf
   
+  
+  #=============run the simulation==============
   for(t in 1:Tf){ #for each time point
     if(t %% 10 == 0){cat("Time:", t, "\n")}
     #set up dm matrix:
-    dm <- t(i.mat)*datm[,1] #get the NUMBER of individuals leaving each pop for each other pop
+    cdm <- t(i.mat)*datm[,1] #get the NUMBER of individuals leaving each pop for each other pop
     #with [1,1] the number that stay in 1,
     #[1,2] the number that leave 1 for 2, and so on.
-    dm <- round(dm) #round the pops
+    dm <- round(cdm) #round the pops
     
     
     #do all of the binoms for each locus
     for(h in 1:l){ #for each loci...
+      browser()
       bm <- matrix(NA, dim(dm)[1], dim(dm)[2]) #create an output matrix for mafs after binom
       maf <- datm[,(h+2)] #set mafs to work with
       
@@ -341,6 +337,7 @@ stream.drift <- function(n0, l, a = NULL, r, m = NULL, L = NULL, k, Tf, maf.min 
           #browser()
         }
         else{
+          browser()
           inds <- rbinom(nt, 2, maf[i]) #do a draws for each individual from the input maf
           pos <- 0 #set starting position in the inds vector to zero
           for(j in 1:(length(nds))){ #partition individuals form the inds vector into each location
@@ -358,7 +355,28 @@ stream.drift <- function(n0, l, a = NULL, r, m = NULL, L = NULL, k, Tf, maf.min 
     }
     datm[,1]<-i.mat%*%datm[,1] #spread pop
     datm[,1]<-BH(datm[,1], r, k) #grow pop
+    datm[which(datm[,1] < 1),-c(1:2)] <- NA
+    
+    # fix for any sites which had more than one individual migrate in but which had less than one individual per source pop.
+    # does by taking the weighted average maf then doing draws from there
+    bads <- which(rowSums(is.nan(datm[,-c(1:2)])) == ncol(datm) - 2)
+    if(length(bads) != 0){
+      # get weights
+      tcdm <- cdm[bads,]
+      tcdm <- tcdm[,-which(is.na(maf))]
+      w <- tcdm/rowSums(tcdm, na.rm = T)
+      
+      # do binoms for each maf
+      for(h in 1:l){
+        twa <- t(w)*maf[-which(is.na(datm[,h + 2]))]
+        twa <- colSums(twa, na.rm = T)
+        datm[bads, h + 2] <- rbinom(length(bads), round(datm[bads,1]*2), twa)/round(datm[bads,1]*2)
+      }
+    }
   }
+  
+  
+  #=============return==========================
   colnames(datm) <- c("N", "xs", paste0("loci", 1:l)) #change column names for datm
   return(list(dat = as.data.frame(datm), imafs = imaf)) #return datm and imaf
 }
@@ -434,14 +452,13 @@ A3 <- function(a,m,L,n,y,xs){
 #
 #Notes:
 # Undercase s and e are restricted vertex names, and will cause errors if used in input.
-Edge.to.Matrix <- function(brchs, a, m, dx, give.xs = TRUE, normalize = TRUE){
+Edge.to.Matrix <- function(brchs, a, m, dx, normalize = TRUE){
   if(any(brchs[,2] %% dx != 0)){
     stop("All branch lengths MUST be divisible by the given dx value. If this is not the case,
         interpolation will not be consistant across branches. 0 length branches are acceptable, and
         will be counted as two vertices with weights.")
   }
   
-  require(igraph)
   #First, designate functions to make branch on branch matrices.
   #A) No nodes
   #A3) Many nodes
@@ -455,6 +472,7 @@ Edge.to.Matrix <- function(brchs, a, m, dx, give.xs = TRUE, normalize = TRUE){
     out <- outer(xs, xs, K)*dx #create matrix
     return(out)
   }
+  
   
   #Same as A, but takes a vector of y values (for multiple nodes). Still needs to be halved, quartered
   #ect. for branch weights as necissary (should be preformed on resulting matrix).
@@ -480,13 +498,12 @@ Edge.to.Matrix <- function(brchs, a, m, dx, give.xs = TRUE, normalize = TRUE){
   
   #construct igraph
   cat("Constructing network...\n")
-  bnet <- graph_from_edgelist(as.matrix(brchs[,c(3,5)]), directed = FALSE) #construct igraph network
+  bnet <- igraph::graph_from_edgelist(as.matrix(brchs[,c(3,5)]), directed = FALSE) #construct igraph network
   # V(bnet)$name <- 1:vcount(bnet) #name vertices
-  if (give.xs == TRUE){ #if the xs data is requested...
-    xs.output <- data.frame(xs = numeric(1), branch = character(1)) #initialize
-    xs.output$branch <- as.character(xs.output$branch)
-  }
   
+  # save xs data
+  xs.output <- data.frame(xs = numeric(1), branch = character(1)) #initialize
+  xs.output$branch <- as.character(xs.output$branch)
   
   ##Next, loop through the branch input file and create matrix (large) row. After the first row, will append new row
   #loop through each row, do every combination (branch j influence on branch i)
@@ -496,9 +513,8 @@ Edge.to.Matrix <- function(brchs, a, m, dx, give.xs = TRUE, normalize = TRUE){
       next
     }
     xs.e <- seq(dx/2, brchs[i,2] - dx/2, by = dx) #ending xs, most upstream at 0
-    if(give.xs == TRUE){ #if the xs data is requested...
-      xs.output <- rbind(xs.output, data.frame(xs = xs.e, branch = brchs[i,1])) 
-    }
+    xs.output <- rbind(xs.output, data.frame(xs = xs.e, branch = brchs[i,1])) 
+    
     mc <- matrix(NA, 1, length(xs.e)) #initialize output matrix
     for(j in 1:nrow(brchs)){ #loop through and compare to each (starting) branch...
       xs.e <- seq(dx/2, brchs[i,2] - dx/2, by = dx) #reset xs.e
@@ -519,9 +535,9 @@ Edge.to.Matrix <- function(brchs, a, m, dx, give.xs = TRUE, normalize = TRUE){
         #print(bnet)
         #print(brchs[i,3])
         #cat(bs.ns, bs.ne, be.ns, be.ne, "\n")
-        paths <- all_simple_paths(bnet + vertex(c("s", "e")) + 
-          edges(c(bs.ns, "s"), c(bs.ne, "s"), c(be.ns, "e"), c(be.ne, "e")) -
-          edges(get.edge.ids(bnet, c(bs.ns, bs.ne)), get.edge.ids(bnet, c(be.ns, be.ne))),
+        paths <- igraph::all_simple_paths(bnet + igraph::vertex(c("s", "e")) + 
+          igraph::edges(c(bs.ns, "s"), c(bs.ne, "s"), c(be.ns, "e"), c(be.ne, "e")) -
+          igraph::edges(igraph::get.edge.ids(bnet, c(bs.ns, bs.ne)), igraph::get.edge.ids(bnet, c(be.ns, be.ne))),
           "s", "e") #add temporary vertex midway through each edge, remove old edges to
                     #avoid loops, then get the simple paths from one new node (the starting
                     #point) to the other (the ending point).
@@ -541,13 +557,13 @@ Edge.to.Matrix <- function(brchs, a, m, dx, give.xs = TRUE, normalize = TRUE){
           #at the end of the branches.
           
           #get branch IDs between vertices
-          t.edges <- get.edge.ids(bnet,c(rbind(V(bnet)$name[verts][-length(verts)], V(bnet)$name[verts][-1])), directed = FALSE)
+          t.edges <- igraph::get.edge.ids(bnet,c(rbind(igraph::V(bnet)$name[verts][-length(verts)], igraph::V(bnet)$name[verts][-1])), directed = FALSE)
           
           #now have edges passed through, and therefore lengths and direction
           #need to set y positions. Get weights at the same time
-          y <- ifelse(brchs[j,3] == V(bnet)$name[verts[1]], 0, brchs[j,2]) #first y is zero if first element of verts is a "start" node, the length of the branch if it is an "end" node.
+          y <- ifelse(brchs[j,3] == igraph::V(bnet)$name[verts[1]], 0, brchs[j,2]) #first y is zero if first element of verts is a "start" node, the length of the branch if it is an "end" node.
           w <- numeric(length(verts)) #initialize weights vector
-          lvert <- ifelse(bs.ns == V(bnet)$name[verts[1]], bs.ne, bs.ns) #the initial "last vertex" is the vertex of the starting branch which isn't the first of the path vertices
+          lvert <- ifelse(bs.ns == igraph::V(bnet)$name[verts[1]], bs.ne, bs.ns) #the initial "last vertex" is the vertex of the starting branch which isn't the first of the path vertices
           if(length(verts) > 1){
             for (h in 1:length(t.edges)){
               tvert <- names(verts)[h] #set the name of the the current vertex, save typing
@@ -561,10 +577,10 @@ Edge.to.Matrix <- function(brchs, a, m, dx, give.xs = TRUE, normalize = TRUE){
             }
           }
           else{
-            tvert <- V(bnet)$name[verts[1]]
+            tvert <- igraph::V(bnet)$name[verts[1]]
           }
-          tvert <- V(bnet)$name[verts[length(verts)]]
-          fvert <- ifelse(be.ns == V(bnet)$name[verts[length(verts)]], be.ne, be.ns) #set final destination vertex
+          tvert <- igraph::V(bnet)$name[verts[length(verts)]]
+          fvert <- ifelse(be.ns == igraph::V(bnet)$name[verts[length(verts)]], be.ne, be.ns) #set final destination vertex
           wi <- ifelse(brchs[j,3] == fvert, brchs[j,4], brchs[j,6]) #get the appropriate final weight
           forks <- brchs[which((brchs[,3] == tvert | brchs[,5] == tvert) & 
                                  (brchs[,3] != lvert & brchs[,5] != lvert)),] #get possible forks for current vertex, not involving previous vertex
@@ -607,14 +623,9 @@ Edge.to.Matrix <- function(brchs, a, m, dx, give.xs = TRUE, normalize = TRUE){
     full.matrix <- full.matrix/rep(colSums(full.matrix), each = nrow(full.matrix))
   }
   
-  if (give.xs == TRUE){
-    xs.output <- xs.output[-1,] #cut off initialization row
-    output <- list(full.matrix, xs.output) #combine the matrix and xs.output into a list
-    return(output) #output both matrix and xs.output
-  }
-  else{
-    return(full.matrix) #output the final matrix
-  }
+  xs.output <- xs.output[-1,] #cut off initialization row
+  output <- list(matrix = full.matrix, xs = xs.output) #combine the matrix and xs.output into a list
+  return(output) #output both matrix and xs.output
 }
 
 
@@ -625,19 +636,13 @@ Edge.to.Matrix <- function(brchs, a, m, dx, give.xs = TRUE, normalize = TRUE){
 #        ei.c: Name or number of the column containing the value to index against in ei (elevation, ext). Higher values in this column will be designated as upstream.
 #        plot.check: If TRUE, plots the soi streams and the vertices to check that they are correct.
 GIS.to.Edge <- function(soi, ei, ei.c, plot.check = TRUE){
-  require(sp)
-  require(raster)
-  require(rgdal)
-  require(dplyr)
-  require(ggplot2)
-  
   
   cat("Reminder: after vertices are found, this function may require user inputs.\nDisaggregating...\n")
   #first need to fully disaggregate soi
-  d.soi <- disaggregate(soi)
+  d.soi <- sp::disaggregate(soi)
   while(!identical(soi, d.soi)){ #while not fully disaggregated...
     soi <- d.soi #reset soi to d.soi
-    d.soi <- disaggregate(soi) #disaggretate again.
+    d.soi <- sp::disaggregate(soi) #disaggretate again.
   }
   soi <- d.soi #reset once more
   remove(d.soi) #remove the extra copy
@@ -647,7 +652,7 @@ GIS.to.Edge <- function(soi, ei, ei.c, plot.check = TRUE){
   #get coordinates for all of the possible vertices, both internal and external.
   #get the internal vertices:
   cat("Finding all vertices..\n")
-  soi.c <- coordinates(soi) #get the coordinates of the lines
+  soi.c <- sp::coordinates(soi) #get the coordinates of the lines
   wmat <- numeric(2)
   for(i in 1:length(soi.c)){ #rbind all the line coordinates together
     wmat <- rbind(wmat, do.call("rbind",soi.c[[i]]))
@@ -661,7 +666,7 @@ GIS.to.Edge <- function(soi, ei, ei.c, plot.check = TRUE){
   #from the sn function
   startEndPoints <- function(x) {
     firstLast <- function(L) {
-      cc <- coordinates(L)[[1]]
+      cc <- sp::coordinates(L)[[1]]
       rbind(cc[1, ], cc[nrow(cc), ])
     }
     do.call(rbind, lapply(x@lines, firstLast))
@@ -674,18 +679,18 @@ GIS.to.Edge <- function(soi, ei, ei.c, plot.check = TRUE){
   
   #figure out elevations for the vertices
   cat("Figuring out elevation for", nrow(zd_es), "total vertices...\n")
-  temp <- SpatialPoints(zd_es, proj4string = CRS(proj4string(soi))) #make a sp df
+  temp <- sp::SpatialPoints(zd_es, proj4string = CRS(proj4string(soi))) #make a sp df
   v.els <- numeric(nrow(data.frame(temp))) #initialize output vector
   branch_map_data <- ggplot2::fortify(soi)
   branch_map_data$vertex <- NA
   
   for (k in 1:length(v.els)) { #loop through the vertices. Could do this by grabbing two closest, interpolating if I wanted to be more accurate.
     cat("Vertex:", k, "\n")
-    ds <- gDistance(temp[k,], ei, byid = TRUE) #get all of the distances to elements of the elevation SLDF
+    ds <- rgeos::gDistance(temp[k,], ei, byid = TRUE) #get all of the distances to elements of the elevation SLDF
     ds <- cbind(1:length(ds), ds) #add the indices back
     colnames(ds) <- c("index", "dist") #add colnames for sorting
     ds <- as.data.frame(ds) 
-    ds <- arrange(ds, dist) 
+    ds <- dplyr::arrange(ds, dist) 
     ds <- ds[!duplicated(ds[,2]),] #take only unique distances, since repeats are almost certainly data errors. Could make an option.
     w1 <- 1-(ds[1,2]/(ds[1,2]+ds[2,2])) #get the weight based on proximity to the two closest points. Could do this for ALL points or trianglulate rather than the first two...
     w2 <- 1-w1
@@ -708,7 +713,7 @@ GIS.to.Edge <- function(soi, ei, ei.c, plot.check = TRUE){
   zd_es_df$el.div <- zd_es_df$elev - mean(zd_es_df$elev) #get the elevation deviation
   off.scale.x <- max(zd_es[,1]) - min(zd_es[,1]) #set the x scale
   off.scale.y <- max(zd_es[,2]) - min(zd_es[,2]) #set the y scale
-  zd_es_df$e.rank <- floor((rank(x = desc(zd_es_df$elev)))) #get the rank, from high to low elevation
+  zd_es_df$e.rank <- floor((rank(x = dplyr::desc(zd_es_df$elev)))) #get the rank, from high to low elevation
   if(any(duplicated(zd_es_df$e.rank))){plot.check <- TRUE} #if there are any matches, MUST check the plot and give corrections
   
   while(plot.check){ #while plot.check is true, plot the intermediate nodes and lines
@@ -717,10 +722,11 @@ GIS.to.Edge <- function(soi, ei, ei.c, plot.check = TRUE){
     zd_es_df$lab <- paste0(zd_es_df$ID, ",", zd_es_df$e.rank) #set the label to show, ID then rank
     
     #plot
-    c.plot <- ggplot() + geom_path(data = fortify(soi), aes(x = long, y = lat, group = group), col = "grey") + 
-      geom_point(data = zd_es_df, aes(x = x, y = y, color = el.div), size = 2) +
-      scale_color_gradient2(high = "red", mid = "blue", low = "purple") +
-      geom_text(data = zd_es_df, aes(x = x + (off.scale.x/90), y = y + (off.scale.y/90), label = lab), color = "darkred")
+    c.plot <- ggplot2::ggplot() + 
+      ggplot2::geom_path(data = ggplot2::fortify(soi), ggplot2::aes(x = long, y = lat, group = group), col = "grey") + 
+      ggplot2::geom_point(data = zd_es_df, ggplot2::aes(x = x, y = y, color = el.div), size = 2) +
+      ggplot2::scale_color_gradient2(high = "red", mid = "blue", low = "purple") +
+      ggplot2::geom_text(data = zd_es_df, ggplot2::aes(x = x + (off.scale.x/90), y = y + (off.scale.y/90), label = lab), color = "darkred")
     
     print(c.plot)
     View(zd_es_df)
@@ -773,7 +779,7 @@ GIS.to.Edge <- function(soi, ei, ei.c, plot.check = TRUE){
         u.t.or <- data.frame(cbind(u.t.or, seq(1:length(u.t.or)))) #get the order explicitly tied to the ID
         colnames(u.t.or) <- c("ID", "sortby") 
         u.t.points <- merge.default(u.t.points, u.t.or, by = "ID") #merge the order info with the points to sort
-        u.t.points <- arrange(u.t.points, sortby) #arrange the points by the order to sort
+        u.t.points <- dplyr::arrange(u.t.points, sortby) #arrange the points by the order to sort
         u.t.points <- u.t.points[,-ncol(u.t.points)]
         u.t.points$new.ranks <- sort(u.t.points$e.rank) #resort to e.ranks into the new order, save as new.ranks
         
@@ -845,14 +851,14 @@ GIS.to.Edge <- function(soi, ei, ei.c, plot.check = TRUE){
     #arrange the vertices in the stream segement by the index in the stream.
     colnames(ms) <- c("s.index", "v.index")
     ms <- as.data.frame(ms)
-    ms <- arrange(ms, s.index) #arrange by stream index. this will sort them and allow for easy stream splitting
+    ms <- dplyr::arrange(ms, s.index) #arrange by stream index. this will sort them and allow for easy stream splitting
     
     
     #split the stream up at each vertex, save info for export.
     for(j in 1:(nrow(ms)-1)){#for each match
       segment <- soi.c[[i]][[1]][ms[j,1]:ms[(j + 1),1],] #this gets the portion of the stream between this vertex and the next
       out[s.c, "branch.id"] <- s.c
-      out[s.c, "branch.length"] <- LineLength(segment)
+      out[s.c, "branch.length"] <- sp::LineLength(segment)
       out[s.c, "start.vertex"] <- ifelse(zd_es_df[zd_es_df$ID == ms[j,2],6] < zd_es_df[zd_es_df$ID == ms[j+1,2],6], ms[j,2], ms[j+1,2]) #print out higher elevation vertex
       out[s.c, "end.vertex"] <- ifelse(zd_es_df[zd_es_df$ID == ms[j,2],6] > zd_es_df[zd_es_df$ID == ms[j+1,2],6], ms[j,2], ms[j+1,2]) #print out lower elevation vertex
       s.c <- s.c + 1 #increase the stream count
@@ -880,4 +886,72 @@ GIS.to.Edge <- function(soi, ei, ei.c, plot.check = TRUE){
 }
 
 
+#' Plot average allele frequency changes across a river map
+#' 
+#' Create plots of allele frequency change across a river map using drift data from \code{\link{stream.drift}},
+#' and edge data.frames and map data from \code{\link{GIS.to.edge}}. Maps are produced using \code{\link[ggplot2]{ggplot}},
+#' and are modifiable as typical for those objects.
+#' 
+#' @param drift.dat list. List containing genetic drift data produced by \code{\link{stream.drift}}.
+#' @param edge.dat list. Edge and map data produced by \code{\link{GIS.to.Edge}}.
+#' @param xs data.frame. xs data, as produced by \code{\link{Edge.to.Matrix}}.
+#' @param viridis.option character, default "viridis". The name of the viridis option to use for plotting, for details
+#'   see documentation for \code{\link[ggplot2]{scale_color_viridis_c}}.
+#' 
+#' @return A list containing \itemize{\item{plot: } A ggplot map. \item{data: } The raw data used to produce the plot.}.
+#' @author William Hemstrom
+#' @export
+plot.stream.drift <- function(drift.dat, edge.dat, xs, viridis.option = "viridis"){
 
+  # add branch metadata back in
+  drift.dat$dat$branch <- xs$branch
+  
+  # melt and find deltas
+  mdat <- reshape2::melt(drift.dat$dat, id.vars = c("N", "xs", "branch"))
+  colnames(mdat)[c(4,5)] <- c("loci", "maf")
+  mdat$delta <- abs(mdat$maf - drift.dat$imafs[as.numeric(substr(mdat$loci, 5, 5))]) 
+
+  # get average differences
+  ave.diff <- tapply(mdat$delta, mdat[,2:3], mean, na.rm = T)
+  ave.diff <- reshape2::melt(ave.diff)
+  ave.diff <- na.omit(ave.diff)
+  
+  # figure out the delta for each point on each branch on the map
+  brchs <- unique(ave.diff$branch)
+  edge.dat$map$delta <- NA
+  for(i in 1:length(brchs)){
+    t.dat <- ave.diff[ave.diff$branch == brchs[i],]
+    t.m.d <- edge.dat$map[edge.dat$map$branch == brchs[i],]
+    sv <- t.m.d[1,]$vertex
+    
+    
+    points.per.xs <- nrow(t.m.d)/nrow(t.dat)
+    vals <- rep(t.dat$value, each = ceiling(points.per.xs))
+    if(length(vals) > nrow(t.m.d)){
+      rm.points <- ceiling(seq(1, length(vals), length = length(vals) - nrow(t.m.d)))
+      if(rm.points[length(rm.points)] > length(vals)){
+        rm.points[length(rm.points)] <- length(vals)
+      }
+      vals <- vals[-rm.points]
+    }
+    
+    
+    if(edge.dat$edges[edge.dat$edges$branch.id == brchs[i], "start.vertex"] == sv){
+      edge.dat$map[edge.dat$map$branch == brchs[i],]$delta <- vals
+    }
+    else if(edge.dat$edges[edge.dat$edges$branch.id == brchs[i], "end.vertex"] == sv){
+      edge.dat$map[edge.dat$map$branch == brchs[i],]$delta <- rev(vals)
+    }
+    else{
+      stop("No vertex match.\n")
+    }
+  }
+  
+  # plot
+  p <- ggplot2::ggplot(edge.dat$map, ggplot2::aes(x = long, y = lat, color = delta, group = group)) + 
+    ggplot2::geom_path() + ggplot2::theme_bw() + 
+    ggplot2::scale_color_viridis_c(option = viridis.option)
+  
+  
+  return(list(plot = p, data = edge.dat$map))
+}

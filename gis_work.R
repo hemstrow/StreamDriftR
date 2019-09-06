@@ -63,79 +63,28 @@ source("R/sn2.R"); source("R/stream_drift.R")
 #=======================start here on a second approach===================
 map.dat <- readRDS("shapefiles/map_dat.RDS")
 
-# get edges
+# get and clean edges
 deschutes <- GIS.to.Edge(map.dat$soi, ei = map.dat$ei, ei.c = "CONTOUR", TRUE)
-d.plot <- deschutes$plot
-d.map.dat <- deschutes$map_data
-deschutes <- deschutes$edges
-
-deschutes$branch.length <- deschutes$branch.length/5200
-deschutes$start.weight <- 1
-deschutes$end.weight <- 1
-deschutes$branch.length <- round(deschutes$branch.length)
+deschutes$edges$branch.length <- deschutes$edges$branch.length/5200
+deschutes$edges$start.weight <- 1
+deschutes$edges$end.weight <- 1
+deschutes$edges$branch.length <- round(deschutes$edges$branch.length)
 
 # make the matrix
-deschutes.m <- Edge.to.Matrix(deschutes, a = 2, m = 5, dx = 1)
+deschutes.m <- Edge.to.Matrix(deschutes$edges, a = 2, m = 5, dx = 1)
 
 # initial pops, 100 at top of system
 n0 <- numeric(nrow(deschutes.m[[2]]))
 n0[which(deschutes.m[[2]]$branch == 7)][1] <- 100
 
 # run
-d.drift <- stream.drift(n0, l = 100, r = 2, k = 500, Tf = 100, in.mat = deschutes.m[[1]], in.xs = deschutes.m[[2]]$xs)
+d.drift <- stream.drift(n0, l = 100, r = 2, k = 500, Tf = 100, in.mat = deschutes.m$matrix, in.xs = deschutes.m$xs$xs)
 
-out <- d.drift
-# add branch metadata back in
-out$dat$branch <- deschutes.m[[2]]$branch
-
-# melt and plot
-mdat <- reshape2::melt(out$dat, id.vars = c("N", "xs", "branch"))
-colnames(mdat)[c(4,5)] <- c("loci", "maf")
-mdat$delta <- abs(mdat$maf - out$imafs[as.numeric(substr(mdat$loci, 5, 5))]) 
-ggplot(mdat, aes(x = xs, y = delta, color = loci)) + geom_line() + theme_bw() + facet_wrap(~branch, scales = "free_x")
-
-ave.diff <- tapply(mdat$delta, mdat[,2:3], mean, na.rm = T)
-ave.diff <- reshape2::melt(ave.diff)
-ave.diff <- na.omit(ave.diff)
-ggplot(ave.diff, aes(x = xs, y = value, color = as.factor(branch))) + geom_line() + 
-  scale_color_viridis_d() +
-  directlabels::geom_dl(aes(label = as.factor(branch)), 
-                        method = list(directlabels::dl.combine("first.points", "last.points"), cex = 0.8))
+#plot
+plot <- plot.stream.drift(drift.dat = d.drift, edge.dat = deschutes, xs = deschutes.m$xs)
 
 
 
-brchs <- unique(ave.diff$branch)
-d.map.dat$delta
-for(i in 1:length(brchs)){
-  t.dat <- ave.diff[ave.diff$branch == brchs[i],]
-  t.m.d <- d.map.dat[d.map.dat$branch == brchs[i],]
-  sv <- t.m.d[1,]$vertex
-  
-  
-  points.per.xs <- nrow(t.m.d)/nrow(t.dat)
-  vals <- rep(t.dat$value, each = ceiling(points.per.xs))
-  if(length(vals) > nrow(t.m.d)){
-    rm.points <- ceiling(seq(1, length(vals), length = length(vals) - nrow(t.m.d)))
-    if(rm.points[length(rm.points)] > length(vals)){
-      rm.points[length(rm.points)] <- length(vals)
-    }
-    vals <- vals[-rm.points]
-  }
-  
-  
-  if(deschutes[deschutes$branch.id == brchs[i], "start.vertex"] == sv){
-    d.map.dat[d.map.dat$branch == brchs[i],]$delta <- vals
-  }
-  else if(deschutes[deschutes$branch.id == brchs[i], "end.vertex"] == sv){
-    d.map.dat[d.map.dat$branch == brchs[i],]$delta <- rev(vals)
-  }
-  else{
-    stop("No vertex match.\n")
-  }
-}
-
-
-ggplot(d.map.dat, aes(x = long, y = lat, color = delta, group = group)) + geom_path() + theme_bw() + scale_color_viridis_c()
 
 #barriers <- shapefile("ODFW_44_5_ofpbds_shp/ofpbds_pt.shp")
 #barriers <- spTransform(barriers, newCRS)
