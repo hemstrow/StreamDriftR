@@ -255,21 +255,40 @@ found.maf <- function(maf, i.mat, n0){
 # in.freqs: Optional input set of allele frequencies to be used instead of randomly drawn ones.
 stream.drift <- function(n0, l, a = NULL, r, m = NULL, L = NULL, k, Tf, maf.min = 0.05, maf.max = 0.5,
                          in.mat = NULL, in.xs = NULL, in.freqs = NULL){
+  require(data.table)
+  
+  #=============subfunctions====================
+  #a function:
+  A <- function(a, m, L, n){
+    K <- function(y, x){#make kernal function
+      out <- exp(-abs(y - m - x)/a)/(2*a)
+      return(out)
+    }
+    deltax <- 2*L/n #set range of x
+    xs <- seq(-L + deltax/2, L - deltax/2, length = n) #create a list of x values in the range of x
+    out <- outer(xs, xs, K)*deltax #create matrix
+    return(list(out, xs))
+  }
+  
+  # vectorized function to do all of the binomial draws across all loci. Returns a new vector of mafs that can be
+  # used to overwrite the stored mafs from t-1
+  do_binoms <- function(dm, datm, l){
+    # binomials
+    suppressWarnings(minors <- rbinom(length(dm)*l, rep(dm*2, each = l), t(datm[,-c(1:2)]))) # for each dispersal location, draw a for each gene copy, against the correct maf for the source population
+    
+    # send to data.table and aggregate
+    minors <- data.table::data.table(dest = rep(rep(1:nrow(dm), each = nrow(dm)), each = l), locus = 1:l, minors = minors)
+    minors <- minors[,list(minors = sum(minors, na.rm = T)), by = 'dest,locus']
+    minors <- data.table::setorder(minors, locus, dest)
+
+    # get frequency and return
+    return(as.numeric(minors$minors)/(2*colSums(dm)))
+  }
   
   #=============matrix preperation==============
   #if no in.mat supplied
   if(is.null(in.mat) == TRUE){
-    #a function:
-    A <- function(a, m, L, n){
-      K <- function(y, x){#make kernal function
-        out <- exp(-abs(y - m - x)/a)/(2*a)
-        return(out)
-      }
-      deltax <- 2*L/n #set range of x
-      xs <- seq(-L + deltax/2, L - deltax/2, length = n) #create a list of x values in the range of x
-      out <- outer(xs, xs, K)*deltax #create matrix
-      return(list(out, xs))
-    }
+    
     #get matrix
     i.mat <- unlist(A(a, m, L, length(n0))[[1]])
     xs <- unlist(A(a, m, L, length(n0))[[2]])
@@ -307,29 +326,21 @@ stream.drift <- function(n0, l, a = NULL, r, m = NULL, L = NULL, k, Tf, maf.min 
   for(t in 1:Tf){ #for each time point
     if(t %% 10 == 0){cat("Time:", t, "\n")}
     #set up dm matrix:
-    browser()
     cdm <- t(i.mat)*datm[,1] #get the NUMBER of individuals leaving each pop for each other pop
     #with [1,1] the number that stay in 1,
     #[1,2] the number that leave 1 for 2, and so on.
     dm <- round(cdm) #round the pops
     
+    # get mafs
+    datm[,-c(1:2)] <- do_binoms(dm, datm, l)
     
-    #do all of the binoms for each locus
-    for(h in 1:l){ #for each loci...
-      maf <- datm[,(h+2)] #set mafs to work with
-      
-      # do the binomial draws
-      suppressWarnings(minors <- rbinom(length(dm), dm*2, maf)) # for each dispersal location, draw a for each gene copy, against the correct maf for the source population
-      minors <- matrix(minors, nrow(dm), ncol(dm))
-      
-      # get the minor allele frequencies
-      mafs <- colSums(minors, na.rm = TRUE)/(2*colSums(dm, na.rm = TRUE))
-      datm[,(h+2)] <- mafs
-    }
     
-
     # fix for any sites which had more than one individual migrate in but which had less than one individual per source pop.
     # does by taking the weighted average maf then doing draws from there
+    # grow and update pop sizes
+    
+    
+    datm[,1] <- colSums(cdm)
     datm[which(datm[,1] < 1),-c(1:2)] <- NA
     bads <- which(rowSums(is.nan(datm[,-c(1:2)])) == ncol(datm) - 2)
     if(length(bads) != 0){
@@ -347,10 +358,7 @@ stream.drift <- function(n0, l, a = NULL, r, m = NULL, L = NULL, k, Tf, maf.min 
       }
     }
     
-    
-    # grow and update pop sizes
-    datm[,1] <- BH(colSums(cdm), r, k) #grow pop
-    
+    datm[,1] <- BH(datm[,1], r, k) #grow pop
   }
   
   
@@ -876,7 +884,7 @@ GIS.to.Edge <- function(soi, ei, ei.c, plot.check = TRUE){
 #' @param viridis.option character, default "viridis". The name of the viridis option to use for plotting, for details
 #'   see documentation for \code{\link[ggplot2]{scale_color_viridis_c}}.
 #' 
-#' @return A list containing \itemize{\item{plot: } A ggplot map. \item{data: } The raw data used to produce the plot.}.
+#' @return A list containing \itemize{\item{delta_plot: } A ggplot map of average allele frequency change. \item{fixed_plot: } A ggplot map of the percentage of fixed alleles. \item{data: } The raw data used to produce the plot.}.
 #' @author William Hemstrom
 #' @export
 plot.stream.drift <- function(drift.dat, edge.dat, xs, viridis.option = "viridis"){
@@ -884,9 +892,13 @@ plot.stream.drift <- function(drift.dat, edge.dat, xs, viridis.option = "viridis
   # add branch metadata back in
   drift.dat$dat$branch <- xs$branch
   
+  # add fixed percentage
+  drift.dat$dat$percent_fixed <- rowSums(ifelse(drift.dat$dat[,-c(1:2, ncol(drift.dat$dat))] == 1 | 
+                                                  drift.dat$dat[,-c(1:2, ncol(drift.dat$dat))] == 0 , 1, 0))/(ncol(drift.dat$dat) - 3)
+  
   # melt and find deltas
-  mdat <- reshape2::melt(drift.dat$dat, id.vars = c("N", "xs", "branch"))
-  colnames(mdat)[c(4,5)] <- c("loci", "maf")
+  mdat <- reshape2::melt(drift.dat$dat, id.vars = c("N", "xs", "branch", "percent_fixed"))
+  colnames(mdat)[(ncol(mdat) - 1):ncol(mdat)] <- c("loci", "maf")
   mdat$delta <- abs(mdat$maf - drift.dat$imafs[as.numeric(substr(mdat$loci, 5, 5))]) 
 
   # get average differences
@@ -894,9 +906,13 @@ plot.stream.drift <- function(drift.dat, edge.dat, xs, viridis.option = "viridis
   ave.diff <- reshape2::melt(ave.diff)
   ave.diff <- na.omit(ave.diff)
   
-  # figure out the delta for each point on each branch on the map
+  # merge delta and percent fixed
+  ave.diff <- merge(ave.diff, unique(mdat[,c("xs", "branch", "percent_fixed")]), by = c("xs", "branch"))
+  
+  # figure out the delta and fixed percentage for each point on each branch on the map
   brchs <- unique(ave.diff$branch)
   edge.dat$map$delta <- NA
+  edge.dat$map$percent_fixed <- NA
   for(i in 1:length(brchs)){
     t.dat <- ave.diff[ave.diff$branch == brchs[i],]
     t.m.d <- edge.dat$map[edge.dat$map$branch == brchs[i],]
@@ -905,20 +921,24 @@ plot.stream.drift <- function(drift.dat, edge.dat, xs, viridis.option = "viridis
     
     points.per.xs <- nrow(t.m.d)/nrow(t.dat)
     vals <- rep(t.dat$value, each = ceiling(points.per.xs))
-    if(length(vals) > nrow(t.m.d)){
-      rm.points <- ceiling(seq(1, length(vals), length = length(vals) - nrow(t.m.d)))
-      if(rm.points[length(rm.points)] > length(vals)){
-        rm.points[length(rm.points)] <- length(vals)
+    pfvals <- rep(t.dat$percent_fixed, each = ceiling(points.per.xs))
+    vals <- cbind(delta = vals, percent_fixed = pfvals)
+    if(nrow(vals) > nrow(t.m.d)){
+      rm.points <- ceiling(seq(1, nrow(vals), length = nrow(vals) - nrow(t.m.d)))
+      if(rm.points[length(rm.points)] > nrow(vals)){
+        rm.points[length(rm.points)] <- nrow(vals)
       }
-      vals <- vals[-rm.points]
+      vals <- vals[-rm.points,]
     }
     
     
     if(edge.dat$edges[edge.dat$edges$branch.id == brchs[i], "start.vertex"] == sv){
-      edge.dat$map[edge.dat$map$branch == brchs[i],]$delta <- vals
+      edge.dat$map[edge.dat$map$branch == brchs[i],]$delta <- vals[,1]
+      edge.dat$map[edge.dat$map$branch == brchs[i],]$percent_fixed <- vals[,2]
     }
     else if(edge.dat$edges[edge.dat$edges$branch.id == brchs[i], "end.vertex"] == sv){
-      edge.dat$map[edge.dat$map$branch == brchs[i],]$delta <- rev(vals)
+      edge.dat$map[edge.dat$map$branch == brchs[i],]$delta <- rev(vals[,1])
+      edge.dat$map[edge.dat$map$branch == brchs[i],]$percent_fixed <- rev(vals[,2])
     }
     else{
       stop("No vertex match.\n")
@@ -926,10 +946,14 @@ plot.stream.drift <- function(drift.dat, edge.dat, xs, viridis.option = "viridis
   }
   
   # plot
-  p <- ggplot2::ggplot(edge.dat$map, ggplot2::aes(x = long, y = lat, color = delta, group = group)) + 
-    ggplot2::geom_path() + ggplot2::theme_bw() + 
+  p1 <- ggplot2::ggplot(edge.dat$map, ggplot2::aes(x = long, y = lat, color = delta, group = group)) + 
+    ggplot2::geom_path() +
+    ggplot2::scale_color_viridis_c(option = viridis.option)
+  
+  p2 <- ggplot2::ggplot(edge.dat$map, ggplot2::aes(x = long, y = lat, color = percent_fixed, group = group)) + 
+    ggplot2::geom_path() + 
     ggplot2::scale_color_viridis_c(option = viridis.option)
   
   
-  return(list(plot = p, data = edge.dat$map))
+  return(list(delta_plot = p1, fixed_plot = p2, data = edge.dat$map))
 }

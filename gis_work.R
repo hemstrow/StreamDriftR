@@ -1,9 +1,9 @@
-library(sp)
-library(rgdal)
-library(raster)
-library(RColorBrewer)
-library(rgeos)
-library(maptools)
+# library(sp)
+# library(rgdal)
+# library(raster)
+# library(RColorBrewer)
+# library(rgeos)
+# library(maptools)
 source("R/sn2.R"); source("R/stream_drift.R")
 
 # #stream and watershed infiles
