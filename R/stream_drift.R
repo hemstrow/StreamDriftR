@@ -212,7 +212,6 @@ found.maf <- function(maf, i.mat, n0){
                    #Therefore, the maf contribution of these individuals is NA, and should be ignored
                    #when calculaing weighted mafs.
       dm[i,] <- 0 #likewise, reset the number of inds moving to zero to avoid messing up weights later
-      #browser()
     }
     else{
       inds <- rbinom(nt, 2, maf[i]) #do a draws for each individual from the input maf
@@ -434,7 +433,7 @@ A3 <- function(a,m,L,n,y,xs){
 
 #Outputs:
 # Dispersal matrix and (if give.xs = TRUE) a dataframe detailing the positions the dispersal matrix
-# refers to.
+# refers to. Each cell gives the dispersal weight from an individual at the position given by the row to the position given by the column.
 #
 #Notes:
 # Undercase s and e are restricted vertex names, and will cause errors if used in input.
@@ -915,6 +914,7 @@ plot.stream.drift <- function(drift.dat, edge.dat, xs, viridis.option = "viridis
   edge.dat$map$percent_fixed <- NA
   for(i in 1:length(brchs)){
     t.dat <- ave.diff[ave.diff$branch == brchs[i],]
+    t.dat <- dplyr::arrange(t.dat, xs)
     t.m.d <- edge.dat$map[edge.dat$map$branch == brchs[i],]
     sv <- t.m.d[1,]$vertex
     
