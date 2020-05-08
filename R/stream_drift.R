@@ -117,6 +117,7 @@ A <- function(a, m, L, n, output = "matrix"){
   }
   deltax <- 2*L/n #set range of x
   xs <- seq(-L + deltax/2, L - deltax/2, length = n) #create a list of x values in the range of x
+  
   out <- outer(xs, xs, K)*deltax #create matrix
   if(output == "matrix"){
     return(out)
@@ -324,39 +325,41 @@ stream.drift <- function(n0, l, a = NULL, r, m = NULL, L = NULL, k, Tf, maf.min 
   #=============run the simulation==============
   for(t in 1:Tf){ #for each time point
     if(t %% 10 == 0){cat("Time:", t, "\n")}
-    #set up dm matrix:
-    cdm <- t(i.mat)*datm[,1] #get the NUMBER of individuals leaving each pop for each other pop
-    #with [1,1] the number that stay in 1,
-    #[1,2] the number that leave 1 for 2, and so on.
-    dm <- round(cdm) #round the pops
+    # set up dm matrix:
+    # get the NUMBER of individuals leaving each pop for each other pop. 
+    # with [1,1] the number that stay in 1,
+    # [1,2] the number that leave 1 for 2, and so on.
+    # note that we use a multinomial instead of matrix multiplication for two reasons:
+    # 1) Fish movement is stochastic, not fixed.
+    # 2) Less than one fish cannot move to a new location
+    dm <- mc2d::rmultinomial(nrow(i.mat), datm[,1], t(i.mat))
     
-    # get mafs
+    # get mafs, update pop sizes
     datm[,-c(1:2)] <- do_binoms(dm, datm, l)
+    datm[,1] <- colSums(dm)
+    datm[which(datm[,1] < 1),-c(1:2)] <- NA # fix NAs
     
+    # # Don't need to do this using the multinomial approach.
+    # # fix for any sites which had more than one individual migrate in but which had less than one individual per source pop.
+    # # does by taking the weighted average maf then doing draws from there
+    # 
+    # bads <- which(rowSums(is.nan(datm[,-c(1:2)])) == ncol(datm) - 2)
+    # if(length(bads) != 0){
+    #   # get weights
+    #   tcdm <- cdm[,bads, drop = F]
+    #   tcdm <- tcdm[-which(is.na(datm[,3])),,drop = F]
+    #   w <- t(tcdm)/colSums(tcdm, na.rm = T)
+    #   w <- t(w)
+    #   
+    #   # do binoms for each maf
+    #   for(h in 1:l){
+    #     twa <- w*datm[,h + 2][-which(is.na(datm[,h + 2]))]
+    #     twa <- colSums(twa, na.rm = T)
+    #     datm[bads, h + 2] <- rbinom(length(bads), round(datm[bads,1]*2), twa)/round(datm[bads,1]*2)
+    #   }
+    # }
     
-    # fix for any sites which had more than one individual migrate in but which had less than one individual per source pop.
-    # does by taking the weighted average maf then doing draws from there
     # grow and update pop sizes
-    
-    
-    datm[,1] <- colSums(cdm)
-    datm[which(datm[,1] < 1),-c(1:2)] <- NA
-    bads <- which(rowSums(is.nan(datm[,-c(1:2)])) == ncol(datm) - 2)
-    if(length(bads) != 0){
-      # get weights
-      tcdm <- cdm[,bads, drop = F]
-      tcdm <- tcdm[-which(is.na(datm[,3])),,drop = F]
-      w <- t(tcdm)/colSums(tcdm, na.rm = T)
-      w <- t(w)
-      
-      # do binoms for each maf
-      for(h in 1:l){
-        twa <- w*datm[,h + 2][-which(is.na(datm[,h + 2]))]
-        twa <- colSums(twa, na.rm = T)
-        datm[bads, h + 2] <- rbinom(length(bads), round(datm[bads,1]*2), twa)/round(datm[bads,1]*2)
-      }
-    }
-    
     datm[,1] <- BH(datm[,1], r, k) #grow pop
   }
   
@@ -956,4 +959,93 @@ plot.stream.drift <- function(drift.dat, edge.dat, xs, viridis.option = "viridis
   
   
   return(list(delta_plot = p1, fixed_plot = p2, data = edge.dat$map))
+}
+
+#' Sample simulated individuals from stream sites.
+#' 
+#' Samples individuals from any number of sites based on the simulated minor allele frequencies at those sites.
+#' Genotypes are in the format 0, 1, or 2, signifying the counts of the frequency of the allele initially given to
+#' \code{\link{stream.drift}}.
+#' 
+#' @param x Drift output. The output of a stream.drift function call.
+#' @param xs data.frame. xs data, as produced by \code{\link{Edge.to.Matrix}}.
+#' @param sites data.frame. A list of the sampling sites, where the first column is the branch ID and the second is the sampling position in miles downstream from branch start. Allele frequencies will be interpolated for sites between simulated points.
+#' @param n numeric vector. The number of individuals to sample per site, in the same order as the sites data.frame.
+DriftToInds <- function(x, xs, sites, n){
+
+  # initialize output
+  genotypes <- matrix(NA, nrow = ncol(x[[1]]) - 2, ncol = sum(n))
+  cumsums <- cumsum(c(1, n)) # cumulative sums for filling genotypes later
+  sample.meta <- data.frame(ID = paste0("samp_", 1:ncol(genotypes)), 
+                            branch = numeric(ncol(genotypes)),
+                            xs = numeric(ncol(genotypes)), stringsAsFactors = F)
+  
+  # loop through each sample site
+  for(i in 1:nrow(sites)){
+    # get site allele frequencies
+    t.dat <- x[[1]][which(xs$branch == sites[i,1]),,drop = F]
+    t.xs <- xs[xs$branch == sites[i,1],, drop = F]
+    
+    # get the allele frequencies
+    if(any(t.xs$xs == sites[i,2])){
+      t.mafs <- t.dat[which(t.dat$xs == sites[i,2]), -c(1:2)]
+    }
+    else if(nrow(t.dat) == 1){
+      t.mafs <- tdat[,-c(1:2)]
+    }
+    else{
+      # figure out which sites are closest and interpolate using linear approximation
+      ## find closest sites
+      closest <- order(abs(t.xs$xs - sites[i,2]))[1:2]
+      closest.xs <- t.xs$xs[closest]
+      t.dat <- t.dat[closest, - 1]
+      
+      # do the linear approximation (y = mx + b), this is vectorized unlike approx()
+      m <- (t.dat[2, -1] - t.dat[1, -1])/(closest.xs[2] - closest.xs[1])
+      b <- t.dat[1, -1]- (m * closest.xs[1])
+      t.mafs <- (m * sites[i,2]) + b
+    }
+    
+    # get the genotypes at this site
+    genos <- rbinom(n = n[i]*length(t.mafs), size = 2, prob = unlist(t.mafs)) # binomial, mafs are recycled (results sorted by individual first)
+    fill.slots <- cumsums[i]:(cumsums[i + 1] - 1)
+    
+    genotypes[,fill.slots] <- matrix(genos, nrow = length(t.mafs), ncol = n[i])
+    
+    # fill sample metadata
+    sample.meta[fill.slots, 2] <- sites[i,1]
+    sample.meta[fill.slots, 3] <- sites[i,2]
+  }
+  
+  snp.meta <- data.frame(snpID = colnames(x[[1]])[-c(1:2)])
+  
+  return(list(genotypes = genotypes, snp.meta = snp.meta, sample.meta = sample.meta))
+}
+
+#' Generate a 1 or 2D site frequency spectrum from simulated individuals.
+#' 
+#' Generates a 1 or 2D site frequency spectrum from individuals simulated via \code{\link{DriftToInds}}.
+#' If not folded, assumes that the tracked allele (that for which the frequency was initially provided to \code{\link{stream.drift}})
+#' is the derived allele.
+IndsToSFS <- function(genotypes, sites, fold = F){
+  
+  # attach metadata
+  g <- t(genotypes$genotypes)
+  g <- cbind(genotypes$sample.meta, g)
+  g <- g[,-1]
+  g$site <- paste0(g$branch, "_", g$xs)
+  sites <- paste0(sites[,1], "_", sites[,2])
+  
+  # filter to only the sites we are using
+  g <- g[g$site %in% sites,]
+  g <- g[,-c(1:2)]
+  
+  # get the allele counts
+  s1 <- colSums(g[g$site == sites[1], - ncol(g)])
+  s2 <- colSums(g[g$site == sites[2], - ncol(g)])
+  
+  # melt and recast
+  dir.freqs <- cbind(loci = 1:length(s1),s1, s2)
+  dir.freqs <- as.data.frame(dir.freqs)
+  sfs <- reshape2::dcast(dir.freqs, s1 ~ s2, fun.aggregate = length)
 }
