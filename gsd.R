@@ -20,13 +20,14 @@ gsd<- function(L, n, m, a, N, afs, loci, r, K, gens){
   #rows = source position
   #cols = destination position
   #ex: pos[3,4] means # fish going from 3 to 4
-  
+  browser()
   dmat<- A(L/2, n, m, a)
   spread<- function(N, dmat){
     #error: pos only has 1 row--> why?
     #do this as multinomial instead--> rmultinom
     #we will treat dmat as the prob a fish goes to location, multinom tells how many fish went
     #vectorize this similar to drift function
+    #browser()
     pos<- mc2d::rmultinomial(nrow(dmat[[1]]), N, dmat[[1]])
     #pos<- rmultinom(N, nrow(dmat[[1]]), dmat[[1]])
     #pos<- N*t((dmat)[[1]])
@@ -48,17 +49,19 @@ gsd<- function(L, n, m, a, N, afs, loci, r, K, gens){
   drift<- function(sites, pos, afs, loci){
     
     #repeat afs for each source location, for each loci
-    
-    repafs<- afs[,rep(1:nrow(pos), each = loci)]
+    #browser()
+    repafs<- afs[rep(1:nrow(pos), each = loci)]
     
     #number of minor alleles
+    
     num_minor<- rbinom(sites*loci, round(rep(pos, each = loci)), repafs)
     #if(any(is.na(num_minor))){
-     # browser()
-   # }
+    #  browser()
+    #}
     
     #data frame of dest #, loci #, and num of minor alleles
     mindf<- data.frame(dest = rep(rep(1:ncol(pos), each = loci), times = ncol(pos)), loci = rep(1:loci, times = ncol(pos)^2), num_minor = num_minor)
+    #browser()
     
     #num allele at each dest at each loci
     numminloci<- reshape2::dcast(mindf, dest~loci, fun.aggregate = sum)
