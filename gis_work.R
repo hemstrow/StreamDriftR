@@ -78,11 +78,20 @@ n0 <- numeric(nrow(deschutes.m[[2]]))
 n0[which(deschutes.m[[2]]$branch == 7)][1] <- 100
 
 # run
-d.drift <- stream.drift(n0, l = 100, r = 2, k = 500, Tf = 100, in.mat = deschutes.m$matrix, in.xs = deschutes.m$xs$xs)
+d.drift <- stream.drift(n0, l = 100, r = 2, k = 500, Tf = 50, in.mat = deschutes.m$matrix, in.xs = deschutes.m$xs$xs)
 
 #plot
 plot <- plot.stream.drift(drift.dat = d.drift, edge.dat = deschutes, xs = deschutes.m$xs)
 
+# sample inds
+s.brchs <- c(9, 5)
+s.dists <- c(3, 15)
+sites <- cbind(s.brchs, s.dists)
+ns <- c(100, 100)
+inds <- DriftToInds(d.drift, deschutes.m$xs, sites, ns)
+
+
+# get 2D afs
 
 
 

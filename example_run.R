@@ -16,16 +16,16 @@ bs <- data.frame(branch.id = c("001", "002", "003", "004", "005", "006"),
 
 
 # convert to a dispersal matrix
-dm <- Edge.to.Matrix(bs, a = 5, 10, 1)
+dm <- Edge.to.Matrix(brchs = bs, a = 5, m = 10, dx = 5)
 
-# normalize so that all individuals end up somewhere (it's a close system). Can change latter
+# normalize so that all individuals end up somewhere (it's a closed system). Can change latter
 for (i in 1:ncol(dm[[1]])){
   dm[[1]][,i] <- dm[[1]][,i]/sum(dm[[1]][,i])
 }
 
 # set the initial pop sizes. As given, this assumes that individuals start as upstream as possible in branch
 n0 <- numeric(nrow(dm[[2]]))
-n0[301] <- 100
+n0[1] <- 100
 
 
 # grab the positions for the matrix entries
