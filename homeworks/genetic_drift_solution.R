@@ -1,4 +1,4 @@
-imaf <- runif(10, 0, .5)
+imaf <- runif(1000, 0, .5)
 
 #============for the first loci only!==================
 N <- 1000
@@ -25,17 +25,19 @@ plot(nmaf)
 # hint: binom(10, 100000, seq(from = .1, to = .5, length.out = 10))/100000
 
 
+N <- 100
+g <- 1000
+nmaf <- matrix(NA, g, length(imaf))
+nmaf[1,] <- imaf
+for(i in 2:g){
+  for(j in 1:length(imaf)){
+    nmaf[i,j] <- rbinom(1, N*2, prob = nmaf[i-1,j])/(N*2)
+  }
+}
 
-#===============part 2: the part 2ining==========================
-# now, track for multiple populations!
-# first, use a nested loop to do each pop each generation
-# second, vectorize everything to loop only through generations.
-
-# we will need a 3D storage solution(nmaf[gen, locus, population])
-# will use an array
-npop <- 10
-g <- 10
-
-nmaf <- array(NA, c(g, length(imaf), npop))
-## access like anything else
-nmaf[2,,3] # gen 2, every locus, pop 3
+N <- 100
+nmaf <- matrix(NA, g, length(imaf))
+nmaf[1,] <- imaf
+for(i in 2:g){
+  nmaf[i,] <- rbinom(length(imaf), N*2, prob = nmaf[i-1,])/(N*2)
+}
