@@ -31,11 +31,11 @@ disperse_and_grow <- function(a, N, m, L, K, r, g){
   out <- A(a, m, L, n)
   
   output <- matrix(NA, nrow = g, ncol = n)
-  output[1,] <- BH(N%*%out, r, K)
+  output[1,] <- BH(colSums(mc2d::rmultinomial(length(N), N, prob = out)), r, K)
   
   for(i in 2:g){
-    dm <- colSums(mc2d::rmultinomial(100, 100, prob = output[i-1,]%*%out))
-    output[i,] <- BH(dm%*%out, r, K)
+    output[i,] <- colSums(mc2d::rmultinomial(length(N), output[i-1,], prob = out))
+    output[i,] <- BH(output[i,], r, K)
   }
   return(output)
 }
