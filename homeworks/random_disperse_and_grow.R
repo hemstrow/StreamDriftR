@@ -39,3 +39,5 @@ disperse_and_grow <- function(a, N, m, L, K, r, g){
   }
   return(output)
 }
+
+matplot(out)
