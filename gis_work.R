@@ -64,7 +64,7 @@ rivers <- spTransform(rivers, crs)
 map.dat <- readRDS("shapefiles/map_dat.RDS")
 
 # get and clean edges
-deschutes <- GIS.to.Edge(map.dat$soi, ei = map.dat$ei, ei.c = "CONTOUR", TRUE)
+deschutes <- GIS.to.Edge(map.dat$soi, ei = map.dat$ei, ei.c = "CONTOUR", TRUE) # Needed re-arrangements: 5,14 6,12 10,13
 deschutes$edges$branch.length <- deschutes$edges$branch.length/5200
 deschutes$edges$start.weight <- 1
 deschutes$edges$end.weight <- 1
