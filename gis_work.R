@@ -1,17 +1,17 @@
-# library(sp)
-# library(rgdal)
-# library(raster)
-# library(RColorBrewer)
-# library(rgeos)
+library(sp)
+library(rgdal)
+library(raster)
+#library(RColorBrewer)
+library(rgeos)
 # library(maptools)
 source("R/sn2.R"); source("R/stream_drift.R")
 
 # #stream and watershed infiles
-# rivers <- shapefile("shapefiles/rivers/rivers.shp")
-# ws <- shapefile("shapefiles/watersheds/Oregon_Watershed_Councils_2014.shp")
-# dcws <- ws[ws$altName == "Upper Deschutes WC" | ws$altName == "Crooked River WC",]
-# #plot(dcws)
-# dcws <- aggregate(dcws)
+rivers <- shapefile("shapefiles/rivers/rivers.shp")
+ws <- shapefile("shapefiles/watersheds/Oregon_Watershed_Councils_2014.shp")
+dcws <- ws[ws$altName == "Upper Deschutes WC" | ws$altName == "Crooked River WC",]
+plot(dcws)
+dcws <- aggregate(dcws)
 # newCRS <- CRS("+proj=lcc +lat_1=43 +lat_2=45.5 +lat_0=41.75 +lon_0=-120.5 +x_0=399999.9999984001 +y_0=0 +datum=NAD83 +units=ft +no_defs +ellps=GRS80 +towgs84=0,0,0")
 # 
 # #elevation infiles, crop them, fix their row ids, and rbind them.
@@ -33,7 +33,7 @@ source("R/sn2.R"); source("R/stream_drift.R")
 # 
 # 
 # #crop rivers
-# rivers <- spTransform(rivers, newCRS)
+rivers <- spTransform(rivers, crs)
 # dr <- crop(rivers, dcws)
 # remove(rivers)
 # 
