@@ -1,12 +1,23 @@
 library(raster)
 soi<- map_dat$soi
 data<- raster("~/Documents/github/Fish/shapefiles/rasters.gri")
+barriers<- rgdal::readOGR("shapefiles/barriers/ofpbds_gdb.gdb", "ofpbds_pt")
+
 river<- readRDS("shapefiles/transformed_river_spdf.RDS")
 crs(data)<- crs(river)
-#river@lines[[1]]@Lines[[1]]@coords
+#sf::st_as_sf(river)
+#plot(sf::st_as_sf(river))
+#segmentizeriver<- sf::st_segmentize(sf::st_as_sf(river), .1)
+
+#sfbarriers<- sf::st_transform(sf::st_as_sf(barriers), as.character(crsriver))
+#barriers<- sf::as_Spatial(sfbarriers)
+#b<- crop(barriers, river)
+river@lines[[1]]@Lines[[1]]@coords
 #river.name<- river$NAME == "Pilot Butte Canal"
 length<- .1
 #n.parts<- 200
+
+###### use st_snap or st_intersection for finding which barriers are where
 
 #function to create an edgefile for input into create.matrix from a SpatialLinesDataFrame.
 #inputs: soi: SpatialLinesDataFrame containing streams.
@@ -18,17 +29,21 @@ length<- .1
 
 GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE){
   
+  #grid?
+  #alt: track distances of segments and put those into adj matrix
+  
   #first we find the nodes
   #split streams into evenly-spaced segments where the fish live
   #make segments: http://rstudio-pubs-static.s3.amazonaws.com/10685_1f7266d60db7432486517a111c76ac8b.html
-  MergeLast <- function(lst) {
+  MergeLast <- function(lst) { #instead of merge last, divide last segment into previous ones
       l <- length(lst)
       lst[[l - 1]] <- rbind(lst[[l - 1]], lst[[l]])
       lst <- lst[1:(l - 1)]
       return(lst)
     }
   CreateSegments <- function(coords, length = 0, n.parts = 0) {
-      stopifnot((length > 0 || n.parts > 0))
+      
+      stopifnot((length > 0 || n.parts > 0))#get rid of this
       # calculate total length line
       total_length <- 0
       for (i in 1:(nrow(coords) - 1)) {
@@ -38,10 +53,18 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
       }
       
       # calculate stationing of segments
-      if (length > 0) {
+      
+      #######ask will: should we set a check to make sure length is small enough to have make sure to have enough segments to make the fractions of the remainders small enough but still have genetic variance
+      if (length > 0) { #insert a check to make sure length is >0 but <whole segment #get rid of the remainders by putting them into each segment
         stationing <- c(seq(from = 0, to = total_length, by = length), total_length)
-      } else {
-        stationing <- c(seq(from = 0, to = total_length, length.out = n.parts), 
+        #remainder (r) = last entry of list - second to last entry of list
+        #make a new list (l) and input every single entry except for last entry 
+        #fraction (f) = r divided by number of entries of l
+        #add f to each entry of l
+        
+        
+      } else {#get rid of this- unnecessary
+        stationing <- c(seq(from = 0, to = total_length, length.out = n.parts), #this has the river divided into a number of parts, which is problem bc our segments are diff lengths
                         total_length)
       }
       
@@ -59,9 +82,9 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
       biggerThanFrom <- F
       for (i in 1:(nrow(coords) - 1)) {
         d <- sqrt((coords[i, 1] - coords[i + 1, 1])^2 + (coords[i, 2] - coords[i + 
-                                                                                 1, 2])^2)
+                                                                                 1, 2])^2)  #get rid of this (already done)
         distance <- distance + d
-        if (!biggerThanFrom && (distance > from)) {
+        if (!biggerThanFrom && (distance > from)) {#probably don't want it to do this but not a big deal
           w <- 1 - (distance - from)/d
           x <- coords[i, 1] + w * (coords[i + 1, 1] - coords[i, 1])
           y <- coords[i, 2] + w * (coords[i + 1, 2] - coords[i, 2])
@@ -69,7 +92,7 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
           biggerThanFrom <- T
         }
         if (biggerThanFrom) {
-          if (distance > to) {
+          if (distance > to) { #probably don't want it to do this but not a big deal
             w <- 1 - (distance - to)/d
             x <- coords[i, 1] + w * (coords[i + 1, 1] - coords[i, 1])
             y <- coords[i, 2] + w * (coords[i + 1, 2] - coords[i, 2])
@@ -204,7 +227,7 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
   #connectivity = barriers (like waterfalls)
   
   avg_elev <- vector("list", length(adjacent_nodes))
-  diff_elev
+  diff_elev <- vector("list", length(adjacent_nodes))
   for(i in 1:length(adjacent_nodes)){
     #find average elev of each segment
     avg_elev[[i]]<- (sum(zd_es_df[adjacent_nodes[[i]], 3]))/(length(adjacent_nodes[[i]]))
