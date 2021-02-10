@@ -35,7 +35,7 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
   #first we find the nodes
   #split streams into evenly-spaced segments where the fish live
   #make segments: http://rstudio-pubs-static.s3.amazonaws.com/10685_1f7266d60db7432486517a111c76ac8b.html
-  MergeLast <- function(lst) { #instead of merge last, divide last segment into previous ones
+  #MergeLast <- function(lst) { #instead of merge last, divide last segment into previous ones
       l <- length(lst)
       lst[[l - 1]] <- rbind(lst[[l - 1]], lst[[l]])
       lst <- lst[1:(l - 1)]
