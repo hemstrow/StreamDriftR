@@ -35,12 +35,7 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
   #first we find the nodes
   #split streams into evenly-spaced segments where the fish live
   #make segments: http://rstudio-pubs-static.s3.amazonaws.com/10685_1f7266d60db7432486517a111c76ac8b.html
-  MergeLast <- function(lst) { #instead of merge last, divide last segment into previous ones
-      l <- length(lst)
-      lst[[l - 1]] <- rbind(lst[[l - 1]], lst[[l]])
-      lst <- lst[1:(l - 1)]
-      return(lst)
-    }
+  
   CreateSegments <- function(coords, length = 0, n.parts = 0) {
       
       stopifnot((length > 0 || n.parts > 0))#get rid of this
@@ -58,10 +53,13 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
       if (length > 0) { #insert a check to make sure length is >0 but <whole segment #get rid of the remainders by putting them into each segment
         stationing <- c(seq(from = 0, to = total_length, by = length), total_length)
         #remainder (r) = last entry of list - second to last entry of list
+        r<- stationing[length(stationing)] - stationing[length(stationing) - 1]
         #make a new list (l) and input every single entry except for last entry 
+        newstationing<- stationing[1:(length(stationing)-1)]
         #fraction (f) = r divided by number of entries of l
+        f<- r/(length(newstationing))
         #add f to each entry of l
-        
+        newstationing<- f + newstationing
         
       } else {#get rid of this- unnecessary
         stationing <- c(seq(from = 0, to = total_length, length.out = n.parts), #this has the river divided into a number of parts, which is problem bc our segments are diff lengths
@@ -70,8 +68,8 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
       
       # calculate segments and store the in list
       newlines <- list()
-      for (i in 1:(length(stationing) - 1)) {
-        newlines[[i]] <- CreateSegment(coords, stationing[i], stationing[i + 
+      for (i in 1:(length(newstationing) - 1)) {
+        newlines[[i]] <- CreateSegment(coords, newstationing[i], newstationing[i + 
                                                                            1])
       }
       return(newlines)
