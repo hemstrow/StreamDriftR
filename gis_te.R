@@ -61,7 +61,11 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
         f<- r/(length(newstationing)-1)
         #add f to each entry of l
         newstationing<- seq(0, f*(length(newstationing)-1), by = f) + newstationing
-        
+        #fraction (f) = r divided by number of entries of l
+        f<- r/(length(newstationing) - 1)
+        #add f to each entry of l
+        newstationing<- seq(0, f*(length(newstationing) - 1), by = f) + newstationing
+
       } else {#get rid of this- unnecessary
         stationing <- c(seq(from = 0, to = total_length, length.out = n.parts), #this has the river divided into a number of parts, which is problem bc our segments are diff lengths
                         total_length)
