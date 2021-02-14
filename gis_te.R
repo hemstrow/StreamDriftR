@@ -55,6 +55,8 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
       # calculate stationing of segments
       
       #######ask will: should we set a check to make sure length is small enough to have make sure to have enough segments to make the fractions of the remainders small enough but still have genetic variance
+      ###### check length to be half the length of smallest stream segment, if no length selected, set the length to half of smallest river segment or smaller
+      #### sanity checks
       if (length > 0) { #insert a check to make sure length is >0 but <whole segment #get rid of the remainders by putting them into each segment
         stationing <- c(seq(from = 0, to = total_length, by = length), total_length)
         #remainder (r) = last entry of list - second to last entry of list
