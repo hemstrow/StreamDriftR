@@ -1,7 +1,8 @@
 library(raster)
+library(geosphere)
 soi<- map_dat$soi
 data<- raster("~/Documents/github/Fish/shapefiles/rasters.gri")
-barriers<- rgdal::readOGR("shapefiles/barriers/ofpbds_gdb.gdb", "ofpbds_pt")
+#barriers<- rgdal::readOGR("shapefiles/barriers/ofpbds_gdb.gdb", "ofpbds_pt")
 
 river<- readRDS("shapefiles/transformed_river_spdf.RDS")
 crs(data)<- crs(river)
@@ -42,7 +43,7 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
       return(lst)
     }
   CreateSegments <- function(coords, length = 0, n.parts = 0) {
-      
+      #install geosphere package- create vector of lengths in segmentspatial lines function
       stopifnot((length > 0 || n.parts > 0))#get rid of this
       # calculate total length line
       total_length <- 0
@@ -54,17 +55,34 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
       
       # calculate stationing of segments
       
+<<<<<<< HEAD
       #######ask will: should we set a check to make sure length is small enough to have make sure to have enough segments to make the fractions of the remainders small enough but still have genetic variance
       ###### check length to be half the length of smallest stream segment, if no length selected, set the length to half of smallest river segment or smaller
       #### sanity checks
+=======
+      #do a default length - divide geosphere::lengthLine by 2
+>>>>>>> edf0e9f35deda5892c92de75abb5dceefc9934dd
       if (length > 0) { #insert a check to make sure length is >0 but <whole segment #get rid of the remainders by putting them into each segment
         stationing <- c(seq(from = 0, to = total_length, by = length), total_length)
         #remainder (r) = last entry of list - second to last entry of list
         #make a new list (l) and input every single entry except for last entry 
+<<<<<<< HEAD
+=======
+        newstationing<- stationing[1:(length(stationing)-1)]
+        #fraction (f) = r divided by number of entries of l-1
+        f<- r/(length(newstationing)-1)
+        #add f to each entry of l
+        newstationing<- seq(0, f*(length(newstationing)-1), by = f) + newstationing
+>>>>>>> edf0e9f35deda5892c92de75abb5dceefc9934dd
         #fraction (f) = r divided by number of entries of l
         #add f to each entry of l
+<<<<<<< HEAD
         
         
+=======
+        newstationing<- seq(0, f*(length(newstationing) - 1), by = f) + newstationing
+
+>>>>>>> edf0e9f35deda5892c92de75abb5dceefc9934dd
       } else {#get rid of this- unnecessary
         stationing <- c(seq(from = 0, to = total_length, length.out = n.parts), #this has the river divided into a number of parts, which is problem bc our segments are diff lengths
                         total_length)
