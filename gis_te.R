@@ -41,7 +41,8 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
       lst[[l - 1]] <- rbind(lst[[l - 1]], lst[[l]])
       lst <- lst[1:(l - 1)]
       return(lst)
-    }
+}
+
   CreateSegments <- function(coords, length = 0, n.parts = 0) {
       #install geosphere package- create vector of lengths in segmentspatial lines function
       stopifnot((length > 0 || n.parts > 0))#get rid of this
@@ -59,6 +60,7 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
       ###### check length to be half the length of smallest stream segment, if no length selected, set the length to half of smallest river segment or smaller
       #### sanity checks
       #do a default length - divide geosphere::lengthLine by 2
+      
       if (length > 0) { #insert a check to make sure length is >0 but <whole segment #get rid of the remainders by putting them into each segment
         stationing <- c(seq(from = 0, to = total_length, by = length), total_length)
         #remainder (r) = last entry of list - second to last entry of list
@@ -84,7 +86,8 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
                                                                            1])
       }
       return(newlines)
-    }
+  }
+  
   CreateSegment <- function(coords, from, to) {
       distance <- 0
       coordsOut <- c()
@@ -108,14 +111,16 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
             coordsOut <- rbind(coordsOut, c(x, y))
             break
           }
+          
           coordsOut <- rbind(coordsOut, c(coords[i + 1, 1], coords[i + 1, 
                                                                    2]))
         }
       }
+      
       return(coordsOut)
   }
+      
   ### write sanity checks in here as well as Geosphere::lengthLine function
-  
   
   SegmentSpatialLines <- function(sl, length = 0, n.parts = 0, merge.last = FALSE) {
       stopifnot((length > 0 || n.parts > 0))
@@ -164,7 +169,7 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
     
   
   #segments
-  spdf<- SegmentSpatialLines(river, length, merge.last = TRUE)
+  spdf <- SegmentSpatialLines(river, length, merge.last = TRUE)
   plot(spdf, col = rep(c("green", "red"), length.out = length(spdf)), axes = T)
   #segment coordinates
   spdf.c <- sp::coordinates(spdf)
