@@ -63,6 +63,13 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
       
       if (length > 0) { #insert a check to make sure length is >0 but <whole segment #get rid of the remainders by putting them into each segment
         stationing <- c(seq(from = 0, to = total_length, by = length), total_length)
+<<<<<<< HEAD
+        r<- stationing[length(stationing)] - stationing[length(stationing)-1]
+        newstationing<- stationing[1:(length(stationing)-1)]
+        f<- r/(length(newstationing)-1)
+        newstationing<- seq(0, f*(length(newstationing)-1), by = f) + newstationing
+        
+=======
         #remainder (r) = last entry of list - second to last entry of list
         r <- stationing[length(stationing)] - stationing[length(stationing)-1]
         #make a new list (l) and input every single entry except for last entry 
@@ -73,6 +80,7 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
         newstationing<- seq(0, f*(length(newstationing) - 1), by = f) + newstationing
         #fraction (f) = r divided by number of entries of l
         #add f to each entry of l
+>>>>>>> ad6bca8edc80bc4a9a6fc6c3064a383a27731350
 
       } else {#get rid of this- unnecessary
         stationing <- c(seq(from = 0, to = total_length, length.out = n.parts), #this has the river divided into a number of parts, which is problem bc our segments are diff lengths
@@ -123,6 +131,7 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
   ### write sanity checks in here as well as Geosphere::lengthLine function
   
   SegmentSpatialLines <- function(sl, length = 0, n.parts = 0, merge.last = FALSE) {
+      #put that down with the default length part
       stopifnot((length > 0 || n.parts > 0))
     
     ######test sanity check
@@ -148,11 +157,25 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
       id <- 0
       newlines <- list()
       sl <- as(sl, "SpatialLines")
+      #find lengths of all lines
+      #for loop?
+      lineLengths<- vector("numeric",length(sl))
+      for(i in 1:length(sl)){
+        lineLengths[i]<- geosphere::lengthLine(sl@lines[[i]]@Lines[[1]]@coords)#divide by 1000
+      }
+      defaultLength<- min(lineLengths)/2
+      if(length > defaultLength){
+        warning("Length must be less than or equal to half of the length of smallest line (in km). Using default length")
+        length<- defaultLength
+      }
+      #if  length is too long, use default
+      #for example if segment length is 2.1 km, and length provided is 
       for (lines in sl@lines) {
         for (line in lines@Lines) {
           crds <- line@coords
           # create segments
           segments <- CreateSegments(coords = crds, length, n.parts)
+          #get rid of this
           if (merge.last && length(segments) > 1) {
             # in case there is only one segment, merging would result into error
             segments <- MergeLast(segments)
@@ -204,7 +227,8 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
   #try to just get the elevation points that match with vertices
   #maybe make a data frame from the vertices
   
-  elev.data<- extract(data, zd_es)
+  #try to parallelize
+  elev.data<- raster::extract(data, zd_es)
   
 
   zd_es <- cbind(zd_es, elev.data)
