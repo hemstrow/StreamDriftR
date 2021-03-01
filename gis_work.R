@@ -114,3 +114,10 @@ inds <- DriftToInds(d.drift, deschutes.m$xs, sites, ns)
 #plot(sn@g$x, sn@g$y, col = sn@g$n, pch = 16, cex = 2, asp = 1)
 #lines(soi)
 #text(sn@g$x, sn@g$y, E(sn@g), pos = 4)
+
+
+### just in case this was needed 
+if (merge.last && length(segments) > 1) {
+  # in case there is only one segment, merging would result into error
+  segments <- MergeLast(segments)
+}
