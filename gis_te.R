@@ -56,7 +56,6 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
       
       # calculate stationing of segments
       
-      #######ask will: should we set a check to make sure length is small enough to have make sure to have enough segments to make the fractions of the remainders small enough but still have genetic variance
       ###### check length to be half the length of smallest stream segment, if no length selected, set the length to half of smallest river segment or smaller
       #### sanity checks
       #do a default length - divide geosphere::lengthLine by 2
@@ -79,9 +78,6 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
         #fraction (f) = r divided by number of entries of l
         #add f to each entry of l
 
-      } else {#get rid of this- unnecessary
-        stationing <- c(seq(from = 0, to = total_length, length.out = n.parts), #this has the river divided into a number of parts, which is problem bc our segments are diff lengths
-                        total_length)
       }
       
       # calculate segments and store the in list
@@ -98,8 +94,6 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
       coordsOut <- c()
       biggerThanFrom <- F
       for (i in 1:(nrow(coords) - 1)) {
-        d <- sqrt((coords[i, 1] - coords[i + 1, 1])^2 + (coords[i, 2] - coords[i + 
-                                                                                 1, 2])^2)  #get rid of this (already done)
         distance <- distance + d
         if (!biggerThanFrom && (distance > from)) {#probably don't want it to do this but not a big deal
           w <- 1 - (distance - from)/d
@@ -170,13 +164,10 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
       for (lines in sl@lines) {
         for (line in lines@Lines) {
           crds <- line@coords
+          
           # create segments
           segments <- CreateSegments(coords = crds, length, n.parts)
-          #get rid of this
-          if (merge.last && length(segments) > 1) {
-            # in case there is only one segment, merging would result into error
-            segments <- MergeLast(segments)
-          }
+
           # transform segments to lineslist for SpatialLines object
           for (segment in segments) {
             newlines <- c(newlines, Lines(list(Line(unlist(segment))), ID = as.character(id)))
@@ -395,7 +386,7 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
             fixed.order <- rbind(fixed.order, t.part) #add this part
           }
           #chop off this point from u.t.points
-          u.t.points <- u.t.points[-1,] #remove the row we just dealt with.
+          u.t.points <- u.t.points[-1,] #remove the row we just dealt with (UNSURE)
         }
         #add the remaining other points
         fixed.order <- rbind(fixed.order, other.points)
