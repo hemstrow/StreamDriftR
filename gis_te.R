@@ -121,7 +121,7 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
   }
   ### write sanity checks in here as well as Geosphere::lengthLine function
   
-  
+   
   SegmentSpatialLines <- function(sl, length = 0, n.parts = 0, merge.last = FALSE) {
       #put that down with the default length part
       stopifnot((length > 0 || n.parts > 0))
@@ -153,7 +153,7 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
       #for loop?
       lineLengths<- vector("numeric",length(sl))
       for(i in 1:length(sl)){
-        lineLengths[i]<- geosphere::lengthLine(sl@lines[[i]]@Lines[[1]]@coords)#divide by 1000
+        lineLengths[i]<- geosphere::lengthLine(sl@lines[[i]]@Lines[[1]]@coords)/1000#divide by 1000
       }
       defaultLength<- min(lineLengths)/2
       if(length > defaultLength){
