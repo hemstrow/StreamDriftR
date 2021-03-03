@@ -37,11 +37,12 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
   #split streams into evenly-spaced segments where the fish live
   #make segments: http://rstudio-pubs-static.s3.amazonaws.com/10685_1f7266d60db7432486517a111c76ac8b.html
   #MergeLast <- function(lst) { #instead of merge last, divide last segment into previous ones
-      l <- length(lst)
-      lst[[l - 1]] <- rbind(lst[[l - 1]], lst[[l]])
-      lst <- lst[1:(l - 1)]
-      return(lst)
-    }
+  #     l <- length(lst)
+  #     lst[[l - 1]] <- rbind(lst[[l - 1]], lst[[l]])
+  #     lst <- lst[1:(l - 1)]
+  #     return(lst)
+  #}
+
   CreateSegments <- function(coords, length = 0, n.parts = 0) {
       #install geosphere package- create vector of lengths in segmentspatial lines function
       stopifnot((length > 0 || n.parts > 0))#get rid of this
@@ -55,10 +56,10 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
       
       # calculate stationing of segments
       
-      #######ask will: should we set a check to make sure length is small enough to have make sure to have enough segments to make the fractions of the remainders small enough but still have genetic variance
       ###### check length to be half the length of smallest stream segment, if no length selected, set the length to half of smallest river segment or smaller
       #### sanity checks
       #do a default length - divide geosphere::lengthLine by 2
+      
       if (length > 0) { #insert a check to make sure length is >0 but <whole segment #get rid of the remainders by putting them into each segment
         stationing <- c(seq(from = 0, to = total_length, by = length), total_length)
         r<- stationing[length(stationing)] - stationing[length(stationing)-1]
@@ -77,9 +78,6 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
         #fraction (f) = r divided by number of entries of l
         #add f to each entry of l
 
-      } else {#get rid of this- unnecessary
-        stationing <- c(seq(from = 0, to = total_length, length.out = n.parts), #this has the river divided into a number of parts, which is problem bc our segments are diff lengths
-                        total_length)
       }
       
       # calculate segments and store the in list
@@ -89,14 +87,13 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
                                                                            1])
       }
       return(newlines)
-    }
+  }
+  
   CreateSegment <- function(coords, from, to) {
       distance <- 0
       coordsOut <- c()
       biggerThanFrom <- F
       for (i in 1:(nrow(coords) - 1)) {
-        d <- sqrt((coords[i, 1] - coords[i + 1, 1])^2 + (coords[i, 2] - coords[i + 
-                                                                                 1, 2])^2)  #get rid of this (already done)
         distance <- distance + d
         if (!biggerThanFrom && (distance > from)) {#probably don't want it to do this but not a big deal
           w <- 1 - (distance - from)/d
@@ -113,18 +110,23 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
             coordsOut <- rbind(coordsOut, c(x, y))
             break
           }
+          
           coordsOut <- rbind(coordsOut, c(coords[i + 1, 1], coords[i + 1, 
                                                                    2]))
         }
       }
+      
       return(coordsOut)
   }
+      
   ### write sanity checks in here as well as Geosphere::lengthLine function
   
-   
+
+
+  # remove n.parts option from this subfunction and anything it calls
   SegmentSpatialLines <- function(sl, length = 0, n.parts = 0, merge.last = FALSE) {
-      #put that down with the default length part
-      stopifnot((length > 0 || n.parts > 0))
+    #put that down with the default length part
+    stopifnot((length > 0 || n.parts > 0))
     
     ######test sanity check
     msg <- character()
@@ -142,49 +144,43 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
     if(length(msg) > 0){
       stop(paste0(msg, collapse = "\n"))
     }
-    
-    return("All values are valid")
+
     #### end sanity check
-    
-      id <- 0
-      newlines <- list()
-      sl <- as(sl, "SpatialLines")
-      #find lengths of all lines
-      #for loop?
-      lineLengths<- vector("numeric",length(sl))
-      for(i in 1:length(sl)){
-        lineLengths[i]<- geosphere::lengthLine(sl@lines[[i]]@Lines[[1]]@coords)/1000#divide by 1000
-      }
-      defaultLength<- min(lineLengths)/2
-      if(length > defaultLength){
-        warning("Length must be less than or equal to half of the length of smallest line (in km). Using default length")
-        length<- defaultLength
-      }
-      #if  length is too long, use default
-      #for example if segment length is 2.1 km, and length provided is 
-      for (lines in sl@lines) {
-        for (line in lines@Lines) {
-          crds <- line@coords
-          # create segments
-          segments <- CreateSegments(coords = crds, length, n.parts)
-          #get rid of this
-          if (merge.last && length(segments) > 1) {
-            # in case there is only one segment, merging would result into error
-            segments <- MergeLast(segments)
-          }
-          # transform segments to lineslist for SpatialLines object
-          for (segment in segments) {
-            newlines <- c(newlines, Lines(list(Line(unlist(segment))), ID = as.character(id)))
-            id <- id + 1
-          }
+    id <- 0
+    newlines <- list()
+    sl <- as(sl, "SpatialLines")
+    #find lengths of all lines
+    #for loop?
+    lineLengths<- vector("numeric",length(sl))
+    for(i in 1:length(sl)){
+      lineLengths[i]<- geosphere::lengthLine(sl@lines[[i]]@Lines[[1]]@coords)/1000#divide by 1000
+    }
+    defaultLength<- min(lineLengths)/2
+    if(length > defaultLength){
+      warning("Length must be less than or equal to half of the length of smallest line (in km). Using default length")
+      length<- defaultLength
+    }
+    #if  length is too long, use default
+    #for example if segment length is 2.1 km, and length provided is 
+    for (lines in sl@lines) {
+      for (line in lines@Lines) {
+        crds <- line@coords
+        
+        # create segments
+        segments <- CreateSegments(coords = crds, length, n.parts)
+        
+        # transform segments to lineslist for SpatialLines object
+        for (segment in segments) {
+          newlines <- c(newlines, Lines(list(Line(unlist(segment))), ID = as.character(id)))
+          id <- id + 1
         }
       }
-      return(SpatialLines(newlines))
     }
-    
+    return(SpatialLines(newlines))
+  }
   
   #segments
-  spdf<- SegmentSpatialLines(river, length, merge.last = TRUE)
+  spdf <- SegmentSpatialLines(river, length, merge.last = TRUE)
   plot(spdf, col = rep(c("green", "red"), length.out = length(spdf)), axes = T)
   #segment coordinates
   spdf.c <- sp::coordinates(spdf)
@@ -390,7 +386,7 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
             fixed.order <- rbind(fixed.order, t.part) #add this part
           }
           #chop off this point from u.t.points
-          u.t.points <- u.t.points[-1,] #remove the row we just dealt with.
+          u.t.points <- u.t.points[-1,] #remove the row we just dealt with (UNSURE)
         }
         #add the remaining other points
         fixed.order <- rbind(fixed.order, other.points)
@@ -461,4 +457,4 @@ GIS.to.Edge <- function(soi, length, data, river, river.name, plot.check = TRUE)
   branch_map_data$vertex[-which(is.na(branch_map_data$vertex))] <- paste0("vertex_", branch_map_data$vertex[-which(is.na(branch_map_data$vertex))])
   
   return(list(edges = out, plot = c.plot, map_data = branch_map_data))
-
+}
