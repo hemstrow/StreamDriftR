@@ -1,0 +1,15 @@
+Package: StreamDriftR
+Title: Simulate Fish Movement and Genetic Drift Along Riverine Systems
+Version: 0.0.0.9000
+Authors@R: 
+    person(given = "William",
+           family = "Hemstrom",
+           role = c("aut", "cre"),
+           email = "whemstrom@ucdavis.edu")
+Description: This package simulates fish movement and genetic drift
+             along riverine systems using a network approach.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.1.1
