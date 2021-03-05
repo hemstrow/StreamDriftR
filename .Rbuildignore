@@ -1,2 +1,4 @@
 ^LICENSE\.md$
 msc\*
+^.*\.Rproj$
+^\.Rproj\.user$
